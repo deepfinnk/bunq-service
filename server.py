@@ -1,3 +1,5 @@
+import json
+from bunq.sdk.context.user_context import UserCompany
 from mcp.server.fastmcp import FastMCP
 from libs.share_lib import ShareLib, ShareLibOptions
 from libs.bunq_lib import BunqLib
@@ -14,6 +16,19 @@ bunq = BunqLib(environment_type)
 mcp = FastMCP("Bunq Banking API")
 
 
+def serialize_bunq_object(obj):
+    if hasattr(obj, "__dict__"):
+        return {
+            key: serialize_bunq_object(value) for key, value in obj.__dict__.items()
+        }
+    elif isinstance(obj, list):
+        return [serialize_bunq_object(item) for item in obj]
+    elif isinstance(obj, dict):
+        return {key: serialize_bunq_object(value) for key, value in obj.items()}
+    else:
+        return obj
+
+
 # USER INFORMATION
 @mcp.resource("bunq://user", mime_type="application/json")
 def get_user():
@@ -23,7 +38,8 @@ def get_user():
     Returns details about the currently authenticated user including name, email,
     and other account information.
     """
-    return bunq.get_current_user()
+    user = bunq.get_current_user()
+    return json.dumps(serialize_bunq_object(user))
 
 
 # ACCOUNTS
@@ -41,7 +57,7 @@ def get_accounts():
     """
     accounts = bunq.get_all_monetary_account_active()
     print(accounts)
-    return accounts
+    return json.dumps(serialize_bunq_object(accounts))
 
 
 @mcp.tool()
@@ -77,7 +93,7 @@ def get_payments():
         List of payment details including amount, description, and counterparty.
     """
     payments = bunq.get_all_payment()
-    return payments
+    return json.dumps(serialize_bunq_object(payments))
 
 
 @mcp.tool()
@@ -114,7 +130,7 @@ def get_requests():
         List of request details including amount, description, and requestee.
     """
     requests = bunq.get_all_request()
-    return requests
+    return json.dumps(serialize_bunq_object(requests))
 
 
 @mcp.tool()
@@ -151,7 +167,7 @@ def get_cards():
         List of card details including type, status, and expiry date.
     """
     cards = bunq.get_all_card()
-    return cards
+    return json.dumps(serialize_bunq_object(cards))
 
 
 @mcp.tool()
@@ -191,7 +207,7 @@ def get_aliases():
         return [{"error": "Aliases can only be retrieved in sandbox mode"}]
 
     aliases = bunq.get_all_user_alias()
-    return aliases
+    return json.dumps(serialize_bunq_object(aliases))
 
 
 # NOTIFICATIONS
@@ -236,16 +252,16 @@ def get_overview():
     cards = bunq.get_all_card()
 
     overview = {
-        "user": user,
-        "accounts": accounts,
-        "payments": payments,
-        "requests": requests,
-        "cards": cards,
+        "user": json.dumps(serialize_bunq_object(user)),
+        "accounts": json.dumps(serialize_bunq_object(accounts)),
+        "payments": json.dumps(serialize_bunq_object(payments)),
+        "requests": json.dumps(serialize_bunq_object(requests)),
+        "cards": json.dumps(serialize_bunq_object(cards)),
     }
 
     if environment_type == ApiEnvironmentType.SANDBOX:
         aliases = bunq.get_all_user_alias()
-        overview["aliases"] = aliases
+        overview["aliases"] = json.dumps(serialize_bunq_object(aliases))
 
     return overview
 
