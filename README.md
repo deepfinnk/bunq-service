@@ -6,7 +6,7 @@ uv venv
 uv sync
 ```
 
-## Run with
+## Run Dev
 ```sh
-uv run mcp --help
+uv run mcp dev server.py
 ```
