@@ -5,12 +5,17 @@ from libs.share_lib import ShareLib, ShareLibOptions
 from libs.bunq_lib import BunqLib
 from bunq import ApiEnvironmentType
 from typing import Dict
+from camel.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 all_option = ShareLibOptions()
 environment_type = ShareLib.determine_environment_type_from_all_option(all_option)
 
 # Create bunq connection
 bunq = BunqLib(environment_type)
+
 
 # Create an MCP server
 mcp = FastMCP("Bunq Banking API")
@@ -38,7 +43,9 @@ def get_user():
     Returns details about the currently authenticated user including name, email,
     and other account information.
     """
+    logger.info("Attempting to get user information")
     user = bunq.get_current_user()
+    logger.info("Successfully retrieved user information")
     return json.dumps(serialize_bunq_object(user))
 
 
@@ -55,8 +62,9 @@ def get_accounts():
     Returns:
         List of monetary account details including balance, description, and status.
     """
+    logger.info("Attempting to get active monetary accounts")
     accounts = bunq.get_all_monetary_account_active()
-    print(accounts)
+    logger.info(f"Successfully retrieved {len(accounts)} active accounts")
     return json.dumps(serialize_bunq_object(accounts))
 
 
@@ -74,8 +82,10 @@ def update_account(name: str, account_id: int) -> str:
     Returns:
         Confirmation message
     """
+    logger.info(f"Attempting to update account {account_id} name to '{name}'")
     bunq.update_account(name, account_id)
     bunq.update_context()
+    logger.info(f"Successfully updated account {account_id} name to '{name}'")
     return f"Account {account_id} has been renamed to '{name}'"
 
 
@@ -92,7 +102,9 @@ def get_payments():
     Returns:
         List of payment details including amount, description, and counterparty.
     """
+    logger.info("Attempting to get recent payments")
     payments = bunq.get_all_payment()
+    logger.info(f"Successfully retrieved {len(payments)} payments")
     return json.dumps(serialize_bunq_object(payments))
 
 
@@ -111,8 +123,12 @@ def make_payment(amount: str, description: str, recipient: str) -> str:
     Returns:
         Confirmation message
     """
+    logger.info(
+        f"Attempting to make payment of €{amount} to {recipient} for '{description}'"
+    )
     bunq.make_payment(amount, description, recipient)
     bunq.update_context()
+    logger.info(f"Successfully made payment of €{amount} to {recipient}")
     return f"Payment of €{amount} sent to {recipient} with description: {description}"
 
 
@@ -129,7 +145,9 @@ def get_requests():
     Returns:
         List of request details including amount, description, and requestee.
     """
+    logger.info("Attempting to get payment requests")
     requests = bunq.get_all_request()
+    logger.info(f"Successfully retrieved {len(requests)} requests")
     return json.dumps(serialize_bunq_object(requests))
 
 
@@ -148,8 +166,10 @@ def make_request(amount: str, description: str, recipient: str) -> str:
     Returns:
         Confirmation message
     """
+    logger.info(f"Attempting to request €{amount} from {recipient} for '{description}'")
     bunq.make_request(amount, description, recipient)
     bunq.update_context()
+    logger.info(f"Successfully requested €{amount} from {recipient}")
     return f"Payment request of €{amount} sent to {recipient} with description: {description}"
 
 
@@ -166,7 +186,9 @@ def get_cards():
     Returns:
         List of card details including type, status, and expiry date.
     """
+    logger.info("Attempting to get cards")
     cards = bunq.get_all_card()
+    logger.info(f"Successfully retrieved {len(cards)} cards")
     return json.dumps(serialize_bunq_object(cards))
 
 
@@ -184,8 +206,10 @@ def link_card(card_id: int, account_id: int) -> str:
     Returns:
         Confirmation message
     """
+    logger.info(f"Attempting to link card {card_id} to account {account_id}")
     bunq.link_card(card_id, account_id)
     bunq.update_context()
+    logger.info(f"Successfully linked card {card_id} to account {account_id}")
     return f"Card {card_id} has been linked to account {account_id}"
 
 
@@ -203,10 +227,13 @@ def get_aliases():
     Returns:
         List of alias details.
     """
+    logger.info("Attempting to get aliases")
     if environment_type != ApiEnvironmentType.SANDBOX:
-        return [{"error": "Aliases can only be retrieved in sandbox mode"}]
+        logger.warning("Attempted to get aliases in non-sandbox environment")
+        return json.dumps([{"error": "Aliases can only be retrieved in sandbox mode"}])
 
     aliases = bunq.get_all_user_alias()
+    logger.info(f"Successfully retrieved {len(aliases)} aliases")
     return json.dumps(serialize_bunq_object(aliases))
 
 
@@ -226,8 +253,10 @@ def add_callback_url(callback_url: str) -> str:
     Returns:
         Confirmation message
     """
+    logger.info(f"Attempting to add callback URL: {callback_url}")
     bunq.add_callback_url(callback_url)
     bunq.update_context()
+    logger.info(f"Successfully added callback URL: {callback_url}")
     return f"Callback URL {callback_url} has been added for notifications"
 
 
@@ -245,6 +274,7 @@ def get_overview():
     Returns:
         Dictionary containing all account information.
     """
+    logger.info("Attempting to get complete account overview")
     user = bunq.get_current_user()
     accounts = bunq.get_all_monetary_account_active()
     payments = bunq.get_all_payment()
@@ -260,13 +290,17 @@ def get_overview():
     }
 
     if environment_type == ApiEnvironmentType.SANDBOX:
+        logger.info("Retrieving aliases for sandbox environment overview")
         aliases = bunq.get_all_user_alias()
         overview["aliases"] = json.dumps(serialize_bunq_object(aliases))
 
+    logger.info("Successfully generated account overview")
     return overview
 
 
 # Environment info
+
+
 @mcp.resource("bunq://environment", mime_type="application/json")
 def get_environment() -> Dict[str, str]:
     """
@@ -277,11 +311,15 @@ def get_environment() -> Dict[str, str]:
     Returns:
         Dictionary with environment information.
     """
+    logger.info("Retrieving environment information")
+    env_type = (
+        "PRODUCTION" if environment_type == ApiEnvironmentType.PRODUCTION else "SANDBOX"
+    )
+    config_file = bunq.determine_bunq_conf_filename()
+    logger.info(f"Environment type: {env_type}, Config file: {config_file}")
     return {
-        "type": "PRODUCTION"
-        if environment_type == ApiEnvironmentType.PRODUCTION
-        else "SANDBOX",
-        "config_file": bunq.determine_bunq_conf_filename(),
+        "type": env_type,
+        "config_file": config_file,
     }
 
 
