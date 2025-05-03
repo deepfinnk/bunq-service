@@ -70,9 +70,7 @@ async def main():
         await mcp_toolkit.connect()
 
         # Default task
-        default_task = (
-            "Create a budgeting plan based on my financial information from bunq."
-        )
+        default_task = "Create a budgeting plan based on my financial information from bunq. Use envelope style and create monetary accounts with daily limits for each budget. When done, retrieve the existing accounts and print them nicely."
 
         # Override default task if command line argument is provided
         task = sys.argv[1] if len(sys.argv) > 1 else default_task
@@ -80,7 +78,7 @@ async def main():
         # Connect to all MCP toolkits
         tools = [*mcp_toolkit.get_tools()]
         society = await construct_society(task, tools)
-        answer, chat_history, token_count = await arun_society(society)
+        answer, chat_history, token_count = await arun_society(society, round_limit=3)
         print(f"\033[94mAnswer: {answer}\033[0m")
 
     finally:
