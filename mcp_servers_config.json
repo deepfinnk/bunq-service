@@ -1,0 +1,10 @@
+{
+    "mcpServers": {
+        "bunq": {
+            "command": "python",
+            "args": [
+                "mcp_server_bunq.py"
+            ]
+        }
+    }
+}
