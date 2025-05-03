@@ -132,14 +132,14 @@ async def construct_society(
     """
     models = {
         "user": ModelFactory.create(
-            model_platform=ModelPlatformType.OPENAI,
-            model_type=ModelType.GPT_4O,
-            model_config_dict={"temperature": 0},
+            model_platform=ModelPlatformType.GEMINI,
+            model_type=ModelType.GEMINI_2_5_PRO_EXP,
+            model_config_dict={"temperature": 0.7},
         ),
         "assistant": ModelFactory.create(
-            model_platform=ModelPlatformType.OPENAI,
-            model_type=ModelType.GPT_4O,
-            model_config_dict={"temperature": 0},
+            model_platform=ModelPlatformType.GEMINI,
+            model_type=ModelType.GEMINI_2_5_PRO_EXP,
+            model_config_dict={"temperature": 0.7},
         ),
     }
 
@@ -149,8 +149,14 @@ async def construct_society(
         "tools": tools,
     }
 
+    system_prompt = "You are a helpful financial assistant. Your primary role is to help users manage their finances by creating monetary accounts that function as budget envelopes, using the provided tools. Always follow the user's specific request precisely. It is MANDATORY that all created budget accounts include defined limits (e.g., daily or monthly)."
+
     task_kwargs = {
-        "task_prompt": question,
+        "task_prompt": f"""
+        {system_prompt}
+        Question:
+        {question}
+        """,
         "with_task_specify": False,
     }
 
@@ -178,7 +184,7 @@ async def main():
 
         tools = [*mcp_toolkit.get_tools()]
         society = await construct_society(task, tools)
-        answer, chat_history, token_count = await arun_society(society, round_limit=1)
+        answer, chat_history, token_count = await arun_society(society, round_limit=10)
         print(f"\033[94mAnswer: {answer}\033[0m")
 
     finally:
@@ -222,7 +228,7 @@ async def execute_task():
     await mcp_toolkit.connect()
     tools = [*mcp_toolkit.get_tools()]
     society = await construct_society(task, tools)
-    answer, chat_history, token_count = await arun_society(society, round_limit=1)
+    answer, chat_history, token_count = await arun_society(society, round_limit=10)
     print(f"\033[94mAnswer: {answer}\033[0m")
     return jsonify(
         {"answer": answer, "chat_history": chat_history, "token_count": token_count}
@@ -288,7 +294,7 @@ async def route_get_user():
           type: object
           properties:
             # Add specific user properties based on the Bunq SDK User object structure
-            id: 
+            id:
               type: integer
             display_name:
               type: string
@@ -1031,36 +1037,33 @@ async def route_get_environment():
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=42069)
 
-app.config['SWAGGER'] = {
-    'title': 'MCP Service API',
-    'uiversion': 3,
-    'definitions': {
-        'Error': {
-            'type': 'object',
-            'properties': {
-                'error': {
-                    'type': 'string',
-                    'description': 'Error message detail.'
-                }
-            }
+app.config["SWAGGER"] = {
+    "title": "MCP Service API",
+    "uiversion": 3,
+    "definitions": {
+        "Error": {
+            "type": "object",
+            "properties": {
+                "error": {"type": "string", "description": "Error message detail."}
+            },
         },
-        'Amount': {
-            'type': 'object',
-            'properties': {
-                'currency': {
-                    'type': 'string',
-                    'description': 'The currency code (e.g., EUR).',
-                    'example': 'EUR'
+        "Amount": {
+            "type": "object",
+            "properties": {
+                "currency": {
+                    "type": "string",
+                    "description": "The currency code (e.g., EUR).",
+                    "example": "EUR",
                 },
-                'value': {
-                    'type': 'string', # Bunq uses string for amounts
-                    'description': 'The amount value as a string.',
-                    'example': '123.45'
-                }
-            }
-        }
+                "value": {
+                    "type": "string",  # Bunq uses string for amounts
+                    "description": "The amount value as a string.",
+                    "example": "123.45",
+                },
+            },
+        },
         # Add other common object definitions here if needed
-    }
+    },
 }
 
 swagger = Swagger(app)
