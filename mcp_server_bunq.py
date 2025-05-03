@@ -3,11 +3,12 @@ from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
+from bunq.sdk.model.generated.object_ import Amount
 from mcp.server.fastmcp import Context, FastMCP
 from libs.share_lib import ShareLib, ShareLibOptions
 from libs.bunq_lib import BunqLib
 from bunq import ApiEnvironmentType
-from typing import Dict
+from typing import Dict, Optional
 from camel.logger import get_logger
 
 logger = get_logger(__name__)
@@ -108,6 +109,31 @@ def update_account(ctx: Context, name: str, account_id: int) -> str:
     bunq_instance.update_context()
     logger.info(f"Successfully updated account {account_id} name to '{name}'")
     return f"Account {account_id} has been renamed to '{name}'"
+
+
+@mcp.tool()
+def create_account(ctx: Context, name: str, daily_limit: Optional[float]) -> str:
+    """
+    Create a new monetary account. Can be used to create new budget envelopes.
+
+    Args:
+        name: Description/name for the new account
+        daily_limit: Optional daily limit for the account in euro.
+
+    Returns:
+        Confirmation message
+    """
+    logger.info(f"Attempting to create account '{name}'")
+    bunq_instance = ctx.request_context.lifespan_context.bunq
+    account_id = bunq_instance.create_account(
+        name,
+        Amount(value=f"{daily_limit:.2f}", currency="EUR")
+        if daily_limit is not None
+        else None,
+    )
+    bunq_instance.update_context()
+    logger.info(f"Successfully created account {account_id} with name '{name}'")
+    return f"Account {account_id} has been created with name '{name}'"
 
 
 # PAYMENTS

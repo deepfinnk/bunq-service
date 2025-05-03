@@ -3,7 +3,7 @@ import socket
 from os import remove
 from os.path import isfile
 from time import sleep
-from typing import Union, List
+from typing import Union, List, Optional
 
 import requests
 from bunq import Pagination
@@ -305,6 +305,22 @@ class BunqLib(object):
         """
         MonetaryAccountBank.update(
             monetary_account_bank_id=account_id, description=name
+        )
+
+    def create_account(self, description: str, daily_limit: Optional[Amount]):
+        """Creates a new monetary account. Can be used to create an account for budgeting."""
+        user = self.get_current_user()
+        if isinstance(user, UserPerson):
+            name = user.legal_name
+        elif isinstance(user, UserCompany):
+            name = user.name
+        else:
+            name = ""
+        return MonetaryAccountBank.create(
+            daily_limit=daily_limit,
+            currency="EUR",
+            display_name=name,
+            description=description,
         )
 
     def get_all_user_alias(self) -> List[Pointer]:
