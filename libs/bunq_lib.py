@@ -48,7 +48,7 @@ class BunqLib(object):
     _DEFAULT_COUNT = 10
     _POINTER_TYPE_EMAIL = "EMAIL"
     _CURRENCY_EUR = "EUR"
-    _DEVICE_DESCRIPTION = "python tinker"
+    _DEVICE_DESCRIPTION = "Finn"
 
     _REQUEST_SPENDING_MONEY_AMOUNT = "500.0"
     _REQUEST_SPENDING_MONEY_RECIPIENT = "sugardaddy@bunq.com"
