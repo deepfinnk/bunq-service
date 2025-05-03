@@ -71,9 +71,7 @@ async def main():
 
         # Default task
         default_task = (
-            "I'd like a academic report about Andrew Ng, including "
-            "his research direction, published papers (At least 3),"
-            " institutions, etc. "
+            "Create a budgeting plan based on my financial information from bunq."
         )
 
         # Override default task if command line argument is provided

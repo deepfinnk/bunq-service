@@ -326,20 +326,20 @@ def get_overview(ctx: Context):
     cards = bunq_instance.get_all_card()
 
     overview = {
-        "user": json.dumps(serialize_bunq_object(user)),
-        "accounts": json.dumps(serialize_bunq_object(accounts)),
-        "payments": json.dumps(serialize_bunq_object(payments)),
-        "requests": json.dumps(serialize_bunq_object(requests)),
-        "cards": json.dumps(serialize_bunq_object(cards)),
+        "user": serialize_bunq_object(user),
+        "accounts": serialize_bunq_object(accounts),
+        "payments": serialize_bunq_object(payments),
+        "requests": serialize_bunq_object(requests),
+        "cards": serialize_bunq_object(cards),
     }
 
     if environment_type == ApiEnvironmentType.SANDBOX:
         logger.info("Retrieving aliases for sandbox environment overview")
         aliases = bunq_instance.get_all_user_alias()
-        overview["aliases"] = json.dumps(serialize_bunq_object(aliases))
+        overview["aliases"] = serialize_bunq_object(aliases)
 
     logger.info("Successfully generated account overview")
-    return overview
+    return json.dumps(overview)
 
 
 # Environment info
