@@ -1,7 +1,13 @@
 [project]
-name = "bunq-mcp"
+name = "deepfinnk-bunq-agent"
 version = "0.1.0"
-description = "Add your description here"
+description = "A Flask-based Multi-Agent Collaboration Platform (MCP) server designed to interact with the Bunq API using the CAMEL AI framework."
+authors = [
+    { name = "Victor Hornet" },
+    { name = "Andrea Onofrei" },
+    { name = "Yulin Chen" },
+    { name = "Denis Krylov" },
+]
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
