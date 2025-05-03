@@ -1,6 +1,9 @@
 import json
-from bunq.sdk.context.user_context import UserCompany
-from mcp.server.fastmcp import FastMCP
+from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
+
+from mcp.server.fastmcp import Context, FastMCP
 from libs.share_lib import ShareLib, ShareLibOptions
 from libs.bunq_lib import BunqLib
 from bunq import ApiEnvironmentType
@@ -10,15 +13,30 @@ from camel.logger import get_logger
 logger = get_logger(__name__)
 
 
-all_option = ShareLibOptions()
-environment_type = ShareLib.determine_environment_type_from_all_option(all_option)
+@dataclass
+class AppContext:
+    bunq: BunqLib
+    environment_type: ApiEnvironmentType
 
-# Create bunq connection
-bunq = BunqLib(environment_type)
+
+@asynccontextmanager
+async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
+    """Manage application lifecycle with type-safe context"""
+    # Initialize on startup
+    all_option = ShareLibOptions()
+    environment_type = ShareLib.determine_environment_type_from_all_option(all_option)
+    bunq_instance = BunqLib(environment_type)
+    # No async connect/disconnect seems available in BunqLib, managing instance directly
+    try:
+        yield AppContext(bunq=bunq_instance, environment_type=environment_type)
+    finally:
+        # Cleanup on shutdown (if needed, e.g., saving context)
+        # bunq_instance.update_context() # Example if needed
+        pass
 
 
-# Create an MCP server
-mcp = FastMCP("Bunq Banking API")
+# Create an MCP server with lifespan and dependency declaration
+mcp = FastMCP("Bunq Banking API", lifespan=app_lifespan, dependencies=["bunq-sdk"])
 
 
 def serialize_bunq_object(obj):
@@ -35,8 +53,8 @@ def serialize_bunq_object(obj):
 
 
 # USER INFORMATION
-@mcp.resource("bunq://user", mime_type="application/json")
-def get_user():
+@mcp.tool()
+def get_user(ctx: Context):
     """
     Get current user information from Bunq.
 
@@ -44,7 +62,8 @@ def get_user():
     and other account information.
     """
     logger.info("Attempting to get user information")
-    user = bunq.get_current_user()
+    bunq_instance = ctx.request_context.lifespan_context.bunq
+    user = bunq_instance.get_current_user()
     logger.info("Successfully retrieved user information")
     return json.dumps(serialize_bunq_object(user))
 
@@ -52,8 +71,8 @@ def get_user():
 # ACCOUNTS
 
 
-@mcp.resource("bunq://accounts", mime_type="application/json")
-def get_accounts():
+@mcp.tool()
+def get_accounts(ctx: Context):
     """
     Get all active monetary accounts.
 
@@ -63,13 +82,14 @@ def get_accounts():
         List of monetary account details including balance, description, and status.
     """
     logger.info("Attempting to get active monetary accounts")
-    accounts = bunq.get_all_monetary_account_active()
+    bunq_instance = ctx.request_context.lifespan_context.bunq
+    accounts = bunq_instance.get_all_monetary_account_active()
     logger.info(f"Successfully retrieved {len(accounts)} active accounts")
     return json.dumps(serialize_bunq_object(accounts))
 
 
 @mcp.tool()
-def update_account(name: str, account_id: int) -> str:
+def update_account(ctx: Context, name: str, account_id: int) -> str:
     """
     Update a monetary account's description/name.
 
@@ -83,8 +103,9 @@ def update_account(name: str, account_id: int) -> str:
         Confirmation message
     """
     logger.info(f"Attempting to update account {account_id} name to '{name}'")
-    bunq.update_account(name, account_id)
-    bunq.update_context()
+    bunq_instance = ctx.request_context.lifespan_context.bunq
+    bunq_instance.update_account(name, account_id)
+    bunq_instance.update_context()
     logger.info(f"Successfully updated account {account_id} name to '{name}'")
     return f"Account {account_id} has been renamed to '{name}'"
 
@@ -92,8 +113,8 @@ def update_account(name: str, account_id: int) -> str:
 # PAYMENTS
 
 
-@mcp.resource("bunq://payments", mime_type="application/json")
-def get_payments():
+@mcp.tool()
+def get_payments(ctx: Context):
     """
     Get recent payments.
 
@@ -103,13 +124,14 @@ def get_payments():
         List of payment details including amount, description, and counterparty.
     """
     logger.info("Attempting to get recent payments")
-    payments = bunq.get_all_payment()
+    bunq_instance = ctx.request_context.lifespan_context.bunq
+    payments = bunq_instance.get_all_payment()
     logger.info(f"Successfully retrieved {len(payments)} payments")
     return json.dumps(serialize_bunq_object(payments))
 
 
 @mcp.tool()
-def make_payment(amount: str, description: str, recipient: str) -> str:
+def make_payment(ctx: Context, amount: str, description: str, recipient: str) -> str:
     """
     Make a payment to another Bunq user.
 
@@ -124,10 +146,15 @@ def make_payment(amount: str, description: str, recipient: str) -> str:
         Confirmation message
     """
     logger.info(
-        f"Attempting to make payment of €{amount} to {recipient} for '{description}'"
+        f"Attempting to make payment: {amount} to {recipient} ('{description}')"
     )
-    bunq.make_payment(amount, description, recipient)
-    bunq.update_context()
+    bunq_instance = ctx.request_context.lifespan_context.bunq
+    bunq_instance.make_payment(
+        amount_string=amount,
+        description=description,
+        recipient=recipient,
+    )
+    bunq_instance.update_context()
     logger.info(f"Successfully made payment of €{amount} to {recipient}")
     return f"Payment of €{amount} sent to {recipient} with description: {description}"
 
@@ -135,8 +162,8 @@ def make_payment(amount: str, description: str, recipient: str) -> str:
 # REQUESTS
 
 
-@mcp.resource("bunq://requests", mime_type="application/json")
-def get_requests():
+@mcp.tool()
+def get_requests(ctx: Context):
     """
     Get payment requests.
 
@@ -146,13 +173,14 @@ def get_requests():
         List of request details including amount, description, and requestee.
     """
     logger.info("Attempting to get payment requests")
-    requests = bunq.get_all_request()
+    bunq_instance = ctx.request_context.lifespan_context.bunq
+    requests = bunq_instance.get_all_request()
     logger.info(f"Successfully retrieved {len(requests)} requests")
     return json.dumps(serialize_bunq_object(requests))
 
 
 @mcp.tool()
-def make_request(amount: str, description: str, recipient: str) -> str:
+def make_request(ctx: Context, amount: str, description: str, recipient: str) -> str:
     """
     Request money from another Bunq user.
 
@@ -166,9 +194,16 @@ def make_request(amount: str, description: str, recipient: str) -> str:
     Returns:
         Confirmation message
     """
-    logger.info(f"Attempting to request €{amount} from {recipient} for '{description}'")
-    bunq.make_request(amount, description, recipient)
-    bunq.update_context()
+    logger.info(
+        f"Attempting to make request: {amount} from {recipient} ('{description}')"
+    )
+    bunq_instance = ctx.request_context.lifespan_context.bunq
+    bunq_instance.make_request(
+        amount_string=amount,
+        description=description,
+        recipient=recipient,
+    )
+    bunq_instance.update_context()
     logger.info(f"Successfully requested €{amount} from {recipient}")
     return f"Payment request of €{amount} sent to {recipient} with description: {description}"
 
@@ -176,8 +211,8 @@ def make_request(amount: str, description: str, recipient: str) -> str:
 # CARDS
 
 
-@mcp.resource("bunq://cards", mime_type="application/json")
-def get_cards():
+@mcp.tool()
+def get_cards(ctx: Context):
     """
     Get cards.
 
@@ -187,13 +222,14 @@ def get_cards():
         List of card details including type, status, and expiry date.
     """
     logger.info("Attempting to get cards")
-    cards = bunq.get_all_card()
+    bunq_instance = ctx.request_context.lifespan_context.bunq
+    cards = bunq_instance.get_all_card()
     logger.info(f"Successfully retrieved {len(cards)} cards")
     return json.dumps(serialize_bunq_object(cards))
 
 
 @mcp.tool()
-def link_card(card_id: int, account_id: int) -> str:
+def link_card(ctx: Context, card_id: int, account_id: int) -> str:
     """
     Link a card to a monetary account.
 
@@ -207,19 +243,20 @@ def link_card(card_id: int, account_id: int) -> str:
         Confirmation message
     """
     logger.info(f"Attempting to link card {card_id} to account {account_id}")
-    bunq.link_card(card_id, account_id)
-    bunq.update_context()
+    bunq_instance = ctx.request_context.lifespan_context.bunq
+    bunq_instance.link_card(card_id, account_id)
+    bunq_instance.update_context()
     logger.info(f"Successfully linked card {card_id} to account {account_id}")
-    return f"Card {card_id} has been linked to account {account_id}"
+    return f"Card {card_id} linked to account {account_id}"
 
 
-# ALIASES
+# ALIASES (SANDBOX ONLY)
 
 
-@mcp.resource("bunq://aliases", mime_type="application/json")
-def get_aliases():
+@mcp.tool()
+def get_aliases(ctx: Context):
     """
-    Get all user aliases.
+    Get user aliases (Sandbox only).
 
     Retrieves all aliases (e.g., email, phone number) for the current user.
     Only available in sandbox mode.
@@ -227,12 +264,15 @@ def get_aliases():
     Returns:
         List of alias details.
     """
-    logger.info("Attempting to get aliases")
+    logger.info("Attempting to get user aliases")
+    bunq_instance = ctx.request_context.lifespan_context.bunq
+    environment_type = ctx.request_context.lifespan_context.environment_type
+
     if environment_type != ApiEnvironmentType.SANDBOX:
         logger.warning("Attempted to get aliases in non-sandbox environment")
         return json.dumps([{"error": "Aliases can only be retrieved in sandbox mode"}])
 
-    aliases = bunq.get_all_user_alias()
+    aliases = bunq_instance.get_all_user_alias()
     logger.info(f"Successfully retrieved {len(aliases)} aliases")
     return json.dumps(serialize_bunq_object(aliases))
 
@@ -241,7 +281,7 @@ def get_aliases():
 
 
 @mcp.tool()
-def add_callback_url(callback_url: str) -> str:
+def add_callback_url(ctx: Context, callback_url: str) -> str:
     """
     Add a notification callback URL.
 
@@ -254,8 +294,9 @@ def add_callback_url(callback_url: str) -> str:
         Confirmation message
     """
     logger.info(f"Attempting to add callback URL: {callback_url}")
-    bunq.add_callback_url(callback_url)
-    bunq.update_context()
+    bunq_instance = ctx.request_context.lifespan_context.bunq
+    bunq_instance.add_callback_url(callback_url)
+    bunq_instance.update_context()
     logger.info(f"Successfully added callback URL: {callback_url}")
     return f"Callback URL {callback_url} has been added for notifications"
 
@@ -263,8 +304,8 @@ def add_callback_url(callback_url: str) -> str:
 # OVERVIEW
 
 
-@mcp.resource("bunq://overview", mime_type="application/json")
-def get_overview():
+@mcp.tool()
+def get_overview(ctx: Context):
     """
     Get a complete account overview.
 
@@ -275,11 +316,14 @@ def get_overview():
         Dictionary containing all account information.
     """
     logger.info("Attempting to get complete account overview")
-    user = bunq.get_current_user()
-    accounts = bunq.get_all_monetary_account_active()
-    payments = bunq.get_all_payment()
-    requests = bunq.get_all_request()
-    cards = bunq.get_all_card()
+    bunq_instance = ctx.request_context.lifespan_context.bunq
+    environment_type = ctx.request_context.lifespan_context.environment_type
+
+    user = bunq_instance.get_current_user()
+    accounts = bunq_instance.get_all_monetary_account_active()
+    payments = bunq_instance.get_all_payment()
+    requests = bunq_instance.get_all_request()
+    cards = bunq_instance.get_all_card()
 
     overview = {
         "user": json.dumps(serialize_bunq_object(user)),
@@ -291,7 +335,7 @@ def get_overview():
 
     if environment_type == ApiEnvironmentType.SANDBOX:
         logger.info("Retrieving aliases for sandbox environment overview")
-        aliases = bunq.get_all_user_alias()
+        aliases = bunq_instance.get_all_user_alias()
         overview["aliases"] = json.dumps(serialize_bunq_object(aliases))
 
     logger.info("Successfully generated account overview")
@@ -301,8 +345,8 @@ def get_overview():
 # Environment info
 
 
-@mcp.resource("bunq://environment", mime_type="application/json")
-def get_environment() -> Dict[str, str]:
+@mcp.tool()
+def get_environment(ctx: Context) -> Dict[str, str]:
     """
     Get information about the current Bunq environment.
 
@@ -312,10 +356,13 @@ def get_environment() -> Dict[str, str]:
         Dictionary with environment information.
     """
     logger.info("Retrieving environment information")
+    bunq_instance = ctx.request_context.lifespan_context.bunq
+    environment_type = ctx.request_context.lifespan_context.environment_type
+
     env_type = (
         "PRODUCTION" if environment_type == ApiEnvironmentType.PRODUCTION else "SANDBOX"
     )
-    config_file = bunq.determine_bunq_conf_filename()
+    config_file = bunq_instance.determine_bunq_conf_filename()
     logger.info(f"Environment type: {env_type}, Config file: {config_file}")
     return {
         "type": env_type,
@@ -323,6 +370,23 @@ def get_environment() -> Dict[str, str]:
     }
 
 
+def main(transport: str = "stdio"):
+    r"""Runs the Filesystem MCP Server.
+
+    Args:
+        transport (str): The transport mode ('stdio' or 'sse').
+    """
+    if transport == "stdio":  # standard input output
+        mcp.run(transport="stdio")
+    elif transport == "sse":  # sse
+        mcp.run(transport="sse")
+    else:
+        print(f"Unknown transport mode: {transport}")
+
+
 # Run the server
 if __name__ == "__main__":
-    mcp.run()
+    import sys
+
+    transport_mode = sys.argv[1] if len(sys.argv) > 1 else "stdio"
+    main(transport_mode)  # runn in the defined transport mode
